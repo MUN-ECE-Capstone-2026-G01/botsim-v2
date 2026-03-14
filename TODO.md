@@ -9,22 +9,39 @@ Work through these steps in order. Each step is small enough to implement and te
 **Goal:** Clean separation of concerns in the Pi-side code. Robot still works standalone after this phase (same behavior as today, just reorganized).
 
 - [x] **1.1** Create `robot/` directory in `botsim-v2`
-- [x] **1.2** Create `robot/localization.py` — move all lighthouse logic from `decodeV2pos.py`:
-  - `SweepData`, `SweepBlock`, `Angles`, `BaseStation`, `PulseProcessor`
-  - `calculateAE()`, `ts_sub()`, `ts_add()`, `PERIODS`
-  - Modify `calculate_coordinates_using_p2p()` to **return** `(position, rotation_vec)` instead of calling `drive_to_target()` directly
-- [x] **1.3** Create `robot/motor_control.py` — move motor logic from `decodeV2pos.py`:
-  - Serial setup (`SERIAL_PORT`, `BAUD_RATE`, `ser`)
-  - `get_yaw_from_rvec()`
-  - `drive_to_target()` — change signature to accept `target_x, target_y` as parameters (remove hardcoded `0, 1`)
-  - `stop_motors()` — new helper that sends `0,0\n`
+- [x] **1.2** Update `robot/localization.py` to use the threaded `LighthouseSensor` class pattern (from new `decodeV2pos.py`):
+  - Keep low-level classes: `SweepData`, `SweepBlock`, `Angles`, `BaseStation`, `PulseProcessor`, `calculateAE()`, `ts_sub()`, `ts_add()`, `PERIODS`
+  - Move `get_yaw_from_rvec()` here (it belongs with pose data, not motor control)
+  - Add `LighthouseSensor(source_path)` class:
+    - `__init__`: stores path, initializes `latest_x/y/yaw`, `has_new_data`, `lock`, `running`
+    - `run_continuous_reading()`: blocking sync/read loop (run in `daemon=True` thread)
+    - `_update_pose(angles_obj)`: calls solvePnP, updates state under lock; note `tvec[2]` → Y
+    - `check_new_data()` → `bool` (thread-safe)
+    - `get_latest_reading()` → `(x, y, yaw)` (thread-safe, clears `has_new_data`)
+  - Remove the old top-level `calculate_coordinates()` function
+- [x] **1.3** Update `robot/motor_control.py` — align with new `drive.py` reference:
+  - Change `SERIAL_PORT` to `'/dev/ttyS0'` (motors) — **not** `/dev/ttyAMA2` (that's the lighthouse port)
+  - Remove `get_yaw_from_rvec()` (now lives in `localization.py`)
+  - Add `go_to_position(current_x, current_y, current_theta)` → `(v, w)` (proportional control; advances `current_target_idx` on arrival)
+  - Add `pure_pursuit(current_x, current_y, current_theta)` → `(v, w)` (lookahead path follower along `TARGET_LIST`)
+  - Keep `stop_motors()` sending `0.00,0.00\n`
   - Keep gains (`Kv`, `Kh`) and safety caps (`MAX_V`, `MAX_W`, `STOP_DIST`) as module-level constants
-- [x] **1.4** Create `robot/agent.py` — new main entry point:
-  - Reproduces current behavior: read lighthouse serial → localize → drive to a hardcoded target
-  - Imports from `localization.py` and `motor_control.py`
-  - Target is a variable (not hardcoded in logic), default `(0, 1)` for now
-  - Accepts serial port as CLI argument (same as current `decodeV2pos.py`)
+  - Add `LOOP_FREQ = 20.0`, `DT = 1.0 / LOOP_FREQ` as constants
+- [x] **1.3b** Create `robot/ekf.py` — Extended Kalman Filter:
+  - `ExtendedKalmanFilter(initial_x, initial_y, initial_yaw)` class
+  - `predict(v, w, dt)`: differential-drive kinematic update + covariance propagation via Jacobian `F`
+  - `update(meas_x, meas_y, meas_yaw)`: lighthouse correction (identity `H`; normalize yaw residual)
+  - `get_state()` → `(x, y, yaw)`
+  - Tunable: `Q` (process noise), `R` (measurement noise — lighthouse is accurate, keep small)
+- [x] **1.4** Update `robot/agent.py` — fixed-rate 20 Hz control loop:
+  - Start `LighthouseSensor` in a `daemon=True` background thread
+  - Initialize `ExtendedKalmanFilter`
+  - Track `current_v, current_w` across iterations (needed for EKF predict)
+  - Main loop: `ekf.predict(v, w, DT)` → conditional `ekf.update()` if sensor has new data → `ekf.get_state()` → `pure_pursuit()` → send serial command → `time.sleep(remaining)`
+  - Default target: first entry in `TARGET_LIST` (e.g. `(0, 1.7)`)
+  - Accepts lighthouse serial port as CLI argument
 - [x] **1.5** Update `deck.sh` to call `robot/agent.py` instead of `Lighthouse-Deck/tools/decodeV2pos.py`
+  - Note: shape-deployer eliminated deck.sh entirely and inlines the reboot/flash/start commands via SSH. We may do the same in Phase 3 (fleet_manager.py can issue the three commands directly).
 - [ ] **1.6** Smoke test: deploy `robot/` manually to one Pi and verify it drives to the hardcoded target as before
 
 ---
@@ -65,7 +82,7 @@ Work through these steps in order. Each step is small enough to implement and te
     - Get `all_positions` from broker_client shared state
     - Call `current_algorithm.compute_target(my_id, all_positions)` → target
     - If target is `None` → `stop_motors()`, else `drive_to_target(target, ...)`
-- [ ] **2.8** Create `requirements-robot.txt` (scipy, websockets, pyserial, opencv-python, numpy)
+- [ ] **2.8** Create `requirements-robot.txt` (scipy, websockets, pyserial, opencv-python, numpy; no new deps for EKF — uses only numpy/math)
 - [ ] **2.9** Test broker_client in isolation: run agent with no broker running → verify robot stays idle and does not crash
 
 ---
@@ -109,6 +126,7 @@ Work through these steps in order. Each step is small enough to implement and te
   - Fleet panel (robot table)
   - Algorithm panel (dropdown + Run button)
   - Log panel (scrolling text output)
+  - Map panel (`<canvas>` element for 2D live visualization)
 - [ ] **4.2** Create `web/app.js`:
   - On load: `GET /robots` to populate fleet table
   - Open WebSocket to `/ws/ui` for live updates
@@ -117,10 +135,16 @@ Work through these steps in order. Each step is small enough to implement and te
   - Wire up group buttons (Deploy All, Start All, Stop All)
   - Wire up algorithm dropdown + Run button → `POST /algorithm`
   - Append status messages to log panel
+  - On WS position message: redraw map canvas (robot dots + formation target markers)
 - [ ] **4.3** Create `web/style.css` — minimal clean styling:
   - Online/offline color badges per robot
   - Responsive layout
-- [ ] **4.4** Test UI in browser: verify fleet table updates live, buttons trigger correct API calls, log panel shows output
+- [ ] **4.4** Implement map canvas in `web/app.js`:
+  - `<canvas>` with a fixed world-space viewport (e.g. ±2 m from origin)
+  - Each robot drawn as a labeled dot; heading shown as a short line
+  - Formation target vertices drawn as hollow circles (if algorithm is active)
+  - Redraws on every incoming WS state message (~20 Hz)
+- [ ] **4.5** Test UI in browser: verify fleet table updates live, buttons trigger correct API calls, log panel shows output, map shows robot positions moving in real time
 
 ---
 
@@ -156,7 +180,6 @@ Work through these steps in order. Each step is small enough to implement and te
 
 ## Future (not scheduled)
 
-- [ ] 2D live visualization canvas in web UI
 - [ ] Direct keyboard teleoperation of a single robot from host
 - [ ] "Restart agent" (no bootloader re-flash) button in UI
 - [ ] Per-robot gain tuning from UI

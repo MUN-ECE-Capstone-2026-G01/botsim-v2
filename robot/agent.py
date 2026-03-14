@@ -1,95 +1,75 @@
 #!/usr/bin/env python3
-# Main entry point for the robot agent.
-# Replaces decodeV2pos.py as the script launched by deck.sh.
+# Robot agent — main entry point, launched by deck.sh.
 #
-# Phase 1: behaviour is identical to decodeV2pos.py — localizes via lighthouse
-# and drives to a fixed target. TARGET_X / TARGET_Y will be replaced by
-# dynamic targets received from the host broker in Phase 2.
+# Phase 1 behaviour: drives through TARGET_LIST waypoints using pure_pursuit,
+# with EKF fusing lighthouse measurements and kinematic prediction.
+#
+# Architecture:
+#   - LighthouseSensor runs in a background daemon thread (continuous read)
+#   - Main loop runs at fixed LOOP_FREQ Hz (control is decoupled from sensor rate)
+#   - EKF.predict() runs every loop tick; EKF.update() runs only when new data arrives
+#
+# Phase 2 will add broker_client + swarm algorithms; target will come from
+# current_algorithm.compute_target() rather than the hardcoded TARGET_LIST.
 
 import sys
 import os
-import struct
-import serial
-import math
+import time
+import threading
 
-# Ensure robot/ directory is on the path so sibling modules are importable
-# regardless of which directory the script is launched from.
+# Ensure robot/ directory is importable regardless of launch directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from localization import (
-    PulseProcessor, BaseStation, calculate_coordinates
+from localization import LighthouseSensor
+from ekf import ExtendedKalmanFilter
+from motor_control import (
+    pure_pursuit, stop_motors, send_command,
+    LOOP_FREQ, DT,
 )
-from motor_control import drive_to_target, stop_motors, get_yaw_from_rvec
-
-# --- Target position (hardcoded for Phase 1, will be dynamic in Phase 2) ---
-TARGET_X = 0.0
-TARGET_Y = 1.0
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: {} <input.bin or /dev/tty...>".format(sys.argv[0]))
+        print(f"Usage: {sys.argv[0]} <input.bin or /dev/ttyAMA2>")
         sys.exit(1)
 
-    if sys.argv[1].startswith("/dev/"):
-        src = serial.Serial(sys.argv[1], 2 * 115200)
-    else:
-        src = open(sys.argv[1], "rb")
+    sensor_path = sys.argv[1]
 
-    pulse_processor = PulseProcessor()
-    base_stations = [BaseStation(i) for i in range(16)]
+    # Start lighthouse sensor in background
+    sensor = LighthouseSensor(sensor_path)
+    sensor_thread = threading.Thread(target=sensor.run_continuous_reading, daemon=True)
+    sensor_thread.start()
 
-    print("Waiting for sync ...")
-    sync = [b'\xff'] * 12
-    syncBuffer = [b'\x00'] * len(sync)
-    while sync != syncBuffer:
-        b = src.read(1)
-        if len(b) < 1:
-            sys.exit(1)
-        syncBuffer.append(b)
-        syncBuffer = syncBuffer[1:]
+    print("Waiting for initial sensor sync...")
+    time.sleep(2)
 
-    print("Found sync!")
+    ekf = ExtendedKalmanFilter()
+    current_v, current_w = 0.0, 0.0
 
-    reading = src.read(12)
+    print(f"Starting control loop at {LOOP_FREQ:.0f} Hz ...")
+    try:
+        while True:
+            loop_start = time.time()
 
-    while len(reading) == 12:
-        timestamp  = struct.unpack("<I", reading[9:]  + b'\x00')[0]
-        beam_word  = struct.unpack("<I", reading[6:9] + b'\x00')[0]
-        offset_6   = struct.unpack("<I", reading[3:6] + b'\x00')[0]
-        first_word = struct.unpack("<I", reading[:3]  + b'\x00')[0]
+            # --- Predict (runs every tick using last motor command) ---
+            ekf.predict(current_v, current_w, DT)
 
-        # Offset is expressed in a 6 MHz clock; timestamp uses a 24 MHz clock.
-        offset = offset_6 * 4
+            # --- Update (only when sensor has a fresh frame) ---
+            if sensor.check_new_data():
+                meas_x, meas_y, meas_yaw = sensor.get_latest_reading()
+                print(f"Lighthouse  x={meas_x:.3f}  y={meas_y:.3f}  yaw={meas_yaw:.2f}rad")
+                ekf.update(meas_x, meas_y, meas_yaw)
 
-        sensor = first_word & 0x03
-        width  = (first_word >> 8) & 0xffff
+            # --- Control ---
+            est_x, est_y, est_yaw = ekf.get_state()
+            current_v, current_w  = pure_pursuit(est_x, est_y, est_yaw)
+            send_command(current_v, current_w)
 
-        nPoly_ok = ((first_word >> 7) & 0x01) == 0
-        if nPoly_ok:
-            identity = (first_word >> 2) & 0x1f
-            channel  = identity >> 1
-            slow_bit = identity & 1
-        else:
-            channel  = None
-            slow_bit = None
+            # --- Rate limiting ---
+            elapsed = time.time() - loop_start
+            time.sleep(max(0.0, DT - elapsed))
 
-        # Sync frame — ignore it
-        if offset_6 == 0xffffff:
-            reading = src.read(12)
-            continue
-
-        block = pulse_processor.push(sensor, timestamp, width, offset, channel, slow_bit)
-        if block:
-            angles = base_stations[block.channel].push(block)
-            if angles:
-                angles.dump()
-                result = calculate_coordinates(angles)
-                if result is not None:
-                    position, rotation_vec = result
-                    yaw = math.degrees(get_yaw_from_rvec(rotation_vec))
-                    print(f"Yaw: {yaw:.1f}deg")
-                    drive_to_target(TARGET_X, TARGET_Y, position, rotation_vec)
-                print()
-
-        reading = src.read(12)
+    except KeyboardInterrupt:
+        print("\nStopping robot...")
+        stop_motors()
+        sensor.running = False
