@@ -50,22 +50,24 @@ Work through these steps in order. Each step is small enough to implement and te
 
 **Goal:** Each Pi can connect to the host broker, receive algorithm commands, and run algorithms locally. Requires host broker to be running (Phase 3), but broker_client should degrade gracefully if broker is absent.
 
-- [ ] **2.1** Create `fleet.yaml` at repo root with placeholder values:
+- [x] **2.1** Create `fleet.yaml` at repo root with placeholder values:
   - `broker_host`, `broker_port` (default 8765), `broker_timeout` (default 5)
   - List of robots: `id`, `host`, `user`, `invert_v` (bool — negate forward velocity for motor wiring polarity)
-- [ ] **2.2** Create `robot/config.py` — reads robot ID and per-robot settings from a local config file on the Pi (a copy of `fleet.yaml` deployed there, or a small `robot_config.yaml`):
+- [x] **2.2** Create `robot/config.py` — reads robot ID and per-robot settings from a local config file on the Pi (a copy of `fleet.yaml` deployed there, or a small `robot_config.yaml`):
   - On startup, set `motor_control.INVERT_V` from the robot's `invert_v` field
-- [ ] **2.3** Create `robot/algorithms/base.py` — abstract `SwarmAlgorithm` class:
+- [x] **2.3** Create `robot/algorithms/base.py` — abstract `SwarmAlgorithm` class:
+
   ```python
   def compute_target(self, my_id: str, all_positions: dict) -> tuple[float, float]
   ```
-- [ ] **2.4** Create `robot/algorithms/idle.py` — returns `None` (agent calls `stop_motors()` when target is `None`)
-- [ ] **2.5** Create `robot/algorithms/pentagon.py`:
+
+- [x] **2.4** Create `robot/algorithms/idle.py` — returns `None` (agent calls `stop_motors()` when target is `None`)
+- [x] **2.5** Create `robot/algorithms/pentagon.py`:
   - Compute centroid of all robot positions in `all_positions`
   - Place 5 vertices evenly around centroid at a fixed radius (configurable, e.g. 0.5m)
   - Assign robots to vertices using `scipy.optimize.linear_sum_assignment` (min total distance)
   - Return the vertex assigned to `my_id`
-- [ ] **2.6** Create `robot/broker_client.py` — async WebSocket client (runs in background thread):
+- [x] **2.6** Create `robot/broker_client.py` — async WebSocket client (runs in background thread):
   - Connects to `ws://<broker_host>:<broker_port>/ws/robot`
   - On connect: sends `{"type": "hello", "id": "<robot_id>"}`
   - Publishes position: `{"type": "position", "id": ..., "x": ..., "y": ..., "theta": ...}`
@@ -73,7 +75,7 @@ Work through these steps in order. Each step is small enough to implement and te
   - Receives `{"type": "algorithm", "name": "..."}` → signals algorithm change to agent
   - Tracks `last_contact` timestamp; exposes `is_timed_out()` method
   - Attempts reconnection in background if connection drops
-- [ ] **2.7** Update `robot/agent.py` to use broker_client and algorithms:
+- [x] **2.7** Update `robot/agent.py` to use broker_client and algorithms:
   - Start `broker_client` in a background thread on startup
   - Default algorithm: `idle`
   - Each localization loop iteration:
@@ -82,9 +84,10 @@ Work through these steps in order. Each step is small enough to implement and te
     - If broker_client has a new algorithm → dynamically load it from `algorithms/`
     - Get `all_positions` from broker_client shared state
     - Call `current_algorithm.compute_target(my_id, all_positions)` → target
-    - If target is `None` → `stop_motors()`, else `drive_to_target(target, ...)`
-- [ ] **2.8** Create `requirements-robot.txt` (scipy, websockets, pyserial, opencv-python, numpy; no new deps for EKF — uses only numpy/math)
-- [ ] **2.9** Test broker_client in isolation: run agent with no broker running → verify robot stays idle and does not crash
+    - If target is `None` → `stop_motors()`, else `motor_control.go_to_target(target, ...)`
+  - Also added `motor_control.go_to_target(x, y, theta, tx, ty)` for explicit target passing
+- [x] **2.8** Create `requirements-robot.txt` (scipy, websockets, pyserial, opencv-python, numpy, pyyaml)
+- [x] **2.9** Test broker_client in isolation: run agent with no broker running → verify robot stays idle and does not crash
 
 ---
 

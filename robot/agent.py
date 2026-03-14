@@ -1,31 +1,38 @@
 #!/usr/bin/env python3
 # Robot agent — main entry point, launched by deck.sh.
 #
-# Phase 1 behaviour: drives through TARGET_LIST waypoints using pure_pursuit,
-# with EKF fusing lighthouse measurements and kinematic prediction.
-#
-# Architecture:
-#   - LighthouseSensor runs in a background daemon thread (continuous read)
-#   - Main loop runs at fixed LOOP_FREQ Hz (control is decoupled from sensor rate)
-#   - EKF.predict() runs every loop tick; EKF.update() runs only when new data arrives
-#
-# Phase 2 will add broker_client + swarm algorithms; target will come from
-# current_algorithm.compute_target() rather than the hardcoded TARGET_LIST.
+# Reads fleet.yaml for robot identity and broker address.
+# Connects to host broker via WebSocket; receives algorithm selections.
+# Runs a 20 Hz EKF control loop; falls back to idle if broker unreachable.
 
 import sys
 import os
 import time
 import threading
 
-# Ensure robot/ directory is importable regardless of launch directory
+# Ensure robot/ is importable regardless of launch directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import config
+import motor_control
 from localization import LighthouseSensor
 from ekf import ExtendedKalmanFilter
-from motor_control import (
-    pure_pursuit, stop_motors, send_command,
-    LOOP_FREQ, DT,
-)
+from broker_client import BrokerClient
+from algorithms.idle import Idle
+
+# Apply per-robot hardware config from fleet.yaml
+motor_control.INVERT_V = config.INVERT_V
+
+
+def load_algorithm(name: str):
+    """Instantiate a swarm algorithm by name."""
+    if name == "idle":
+        return Idle()
+    if name == "pentagon":
+        from algorithms.pentagon import Pentagon
+        return Pentagon()
+    print(f"[agent] Unknown algorithm '{name}', falling back to idle")
+    return Idle()
 
 
 if __name__ == "__main__":
@@ -35,41 +42,81 @@ if __name__ == "__main__":
 
     sensor_path = sys.argv[1]
 
-    # Start lighthouse sensor in background
-    sensor = LighthouseSensor(sensor_path)
-    sensor_thread = threading.Thread(target=sensor.run_continuous_reading, daemon=True)
-    sensor_thread.start()
+    print(f"[agent] Robot ID : {config.ROBOT_ID}")
+    print(f"[agent] Broker   : {config.BROKER_HOST}:{config.BROKER_PORT}")
+    print(f"[agent] Timeout  : {config.BROKER_TIMEOUT}s")
+    print(f"[agent] INVERT_V : {config.INVERT_V}")
 
-    print("Waiting for initial sensor sync...")
+    # --- Sensor (background thread) ---
+    sensor = LighthouseSensor(sensor_path)
+    threading.Thread(target=sensor.run_continuous_reading, daemon=True).start()
+    print("[agent] Waiting for initial sensor sync...")
     time.sleep(2)
 
-    ekf = ExtendedKalmanFilter()
-    current_v, current_w = 0.0, 0.0
+    # --- Broker (background thread) ---
+    broker = BrokerClient(
+        robot_id=config.ROBOT_ID,
+        broker_host=config.BROKER_HOST,
+        broker_port=config.BROKER_PORT,
+        timeout=config.BROKER_TIMEOUT,
+    )
+    broker.start()
 
-    print(f"Starting control loop at {LOOP_FREQ:.0f} Hz ...")
+    # --- EKF + algorithm state ---
+    ekf               = ExtendedKalmanFilter()
+    current_algorithm = Idle()
+    current_v         = 0.0
+    current_w         = 0.0
+
+    print(f"[agent] Starting control loop at {motor_control.LOOP_FREQ:.0f} Hz ...")
     try:
         while True:
             loop_start = time.time()
 
-            # --- Predict (runs every tick using last motor command) ---
-            ekf.predict(current_v, current_w, DT)
+            # 1. Kinematic prediction
+            ekf.predict(current_v, current_w, motor_control.DT)
 
-            # --- Update (only when sensor has a fresh frame) ---
+            # 2. Lighthouse update + publish position to broker
             if sensor.check_new_data():
-                meas_x, meas_y, meas_yaw = sensor.get_latest_reading()
-                print(f"Lighthouse  x={meas_x:.3f}  y={meas_y:.3f}  yaw={meas_yaw:.2f}rad")
-                ekf.update(meas_x, meas_y, meas_yaw)
+                x, y, yaw = sensor.get_latest_reading()
+                ekf.update(x, y, yaw)
+                broker.publish_position(x, y, yaw)
+                print(f"[sensor] x={x:.3f}  y={y:.3f}  yaw={yaw:.2f}")
 
-            # --- Control ---
             est_x, est_y, est_yaw = ekf.get_state()
-            current_v, current_w  = pure_pursuit(est_x, est_y, est_yaw)
-            send_command(current_v, current_w)
 
-            # --- Rate limiting ---
+            # 3. Broker timeout → stop and wait for reconnection
+            if broker.is_timed_out():
+                motor_control.stop_motors()
+                current_v, current_w = 0.0, 0.0
+                time.sleep(max(0.0, motor_control.DT - (time.time() - loop_start)))
+                continue
+
+            # 4. Algorithm switch
+            new_algo = broker.get_new_algorithm()
+            if new_algo is not None:
+                print(f"[agent] Switching algorithm → {new_algo}")
+                current_algorithm = load_algorithm(new_algo)
+
+            # 5. Compute target and drive
+            all_positions = broker.get_latest_state()
+            target = current_algorithm.compute_target(config.ROBOT_ID, all_positions)
+
+            if target is None:
+                motor_control.stop_motors()
+                current_v, current_w = 0.0, 0.0
+            else:
+                target_x, target_y = target
+                current_v, current_w = motor_control.go_to_target(
+                    est_x, est_y, est_yaw, target_x, target_y
+                )
+                motor_control.send_command(current_v, current_w)
+
+            # 6. Rate limiting
             elapsed = time.time() - loop_start
-            time.sleep(max(0.0, DT - elapsed))
+            time.sleep(max(0.0, motor_control.DT - elapsed))
 
     except KeyboardInterrupt:
-        print("\nStopping robot...")
-        stop_motors()
+        print("\n[agent] Stopping robot...")
+        motor_control.stop_motors()
         sensor.running = False

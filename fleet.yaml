@@ -1,0 +1,33 @@
+# Fleet configuration — shared between host and robots.
+# Deploy this file to ~/botsim/fleet.yaml on each Pi alongside robot/.
+
+# broker_host: "192.168.x.x"   # set to host laptop IP before deploying
+broker_host: "192.168.78.83"
+broker_port: 8765
+broker_timeout: 5              # seconds before robot stops if broker unreachable
+
+robots:
+  - id: civr-1
+    host: civr-1.local
+    user: visor
+    invert_v: true             # negate forward velocity (depends on motor wiring)
+  # - id: civr-2
+  #   host: civr-2.local
+  #   user: visor
+  #   invert_v: false
+  # - id: civr-3
+  #   host: civr-3.local
+  #   user: visor
+  #   invert_v: false
+  # - id: civr-4
+  #   host: civr-4.local
+  #   user: visor
+  #   invert_v: false
+  # - id: civr-5
+  #   host: civr-5.local
+  #   user: visor
+  #   invert_v: false
+  # - id: civr-6
+  #   host: civr-6.local
+  #   user: visor
+  #   invert_v: false
