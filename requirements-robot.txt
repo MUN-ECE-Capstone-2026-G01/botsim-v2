@@ -1,0 +1,6 @@
+numpy
+opencv-python
+pyserial
+scipy
+websockets
+pyyaml

@@ -77,6 +77,36 @@ def send_command(v, w):
 # Control laws
 # ---------------------------------------------------------------------------
 
+def go_to_target(current_x, current_y, current_theta, target_x, target_y):
+    """
+    Drive toward an explicitly provided (target_x, target_y).
+    Used by swarm algorithms (Phase 2+). Returns (v, w).
+    """
+    dx = target_x - current_x
+    dy = target_y - current_y
+    distance = math.sqrt(dx**2 + dy**2)
+
+    if distance < STOP_DIST:
+        return 0.0, 0.0
+
+    angle_to_target = math.atan2(dx, -dy)
+    heading_error   = angle_to_target - current_theta
+
+    while heading_error >  math.pi: heading_error -= 2 * math.pi
+    while heading_error < -math.pi: heading_error += 2 * math.pi
+
+    if abs(heading_error) > math.radians(60):
+        v = 0.0
+        w = Kh * heading_error
+    else:
+        v = Kv * distance * math.cos(heading_error)
+        w = Kh * heading_error
+
+    v = max(min(v, MAX_V), -MAX_V)
+    w = max(min(w, MAX_W), -MAX_W)
+    return v, w
+
+
 def go_to_position(current_x, current_y, current_theta):
     """
     Proportional heading + distance controller.
