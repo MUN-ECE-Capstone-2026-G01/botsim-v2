@@ -69,9 +69,10 @@ botsim-v2/
 │   └── style.css
 │
 └── robot/                        # Deployed to each Pi via rsync/SCP
-    ├── agent.py                  # Main entry point (replaces decodeV2pos.py as entry)
-    ├── localization.py           # All lighthouse logic (extracted from decodeV2pos.py)
-    ├── motor_control.py          # drive_to_target, serial setup (from decodeV2pos.py)
+    ├── agent.py                  # Main entry point; fixed-rate 20 Hz control loop
+    ├── localization.py           # LighthouseSensor class (threaded); runs sensor in background
+    ├── ekf.py                    # ExtendedKalmanFilter: fuses lighthouse + kinematic prediction
+    ├── motor_control.py          # go_to_position, pure_pursuit, serial setup (/dev/ttyS0)
     ├── broker_client.py          # WebSocket client: publish position, receive state
     ├── config.py                 # Reads robot ID and broker address from config file
     └── algorithms/
@@ -99,6 +100,11 @@ botsim-v2/
 - Assignment uses minimum total distance (scipy `linear_sum_assignment`)
 - Each robot independently computes the same assignment deterministically and selects its own target by `my_id`
 - No inter-robot communication required beyond what the broker already provides
+
+### Serial ports on the Pi
+- **`/dev/ttyAMA2`** — lighthouse FPGA UART (raw sensor data in, 230400 baud)
+- **`/dev/ttyS0`** — ESP32 motor driver UART (velocity commands out, 115200 baud)
+These are two distinct ports and must not be confused.
 
 ### Bootloader / lighthouse FPGA init
 - `deck.sh` runs the full sequence on every `Start`:
@@ -138,15 +144,29 @@ robots:
 ## Component Details
 
 ### `robot/localization.py`
-Pure extraction of lighthouse logic from `decodeV2pos.py`:
-- `SweepData`, `SweepBlock`, `Angles`, `BaseStation`, `PulseProcessor`
-- `calculate_coordinates_using_p2p()` → returns `(position, rotation_vec)` instead of calling `drive_to_target` directly
+Wraps all lighthouse decoding in a `LighthouseSensor` class that runs in a background thread:
+- Low-level classes: `SweepData`, `SweepBlock`, `Angles`, `BaseStation`, `PulseProcessor`
+- Helper functions: `calculateAE()`, `ts_sub()`, `ts_add()`, `PERIODS`, `get_yaw_from_rvec()`
+- `LighthouseSensor(source_path)` — accepts `/dev/ttyAMA2` or a `.bin` file
+  - `run_continuous_reading()` — blocking loop, meant to run in a `daemon=True` thread
+  - `check_new_data()` → `bool`
+  - `get_latest_reading()` → `(x, y, yaw)` — thread-safe via `threading.Lock`
+- Note: PnP output maps `tvec[0]` → X, `tvec[2]` → Y (camera Z-axis = robot forward)
+
+### `robot/ekf.py`
+`ExtendedKalmanFilter` that fuses lighthouse measurements with differential-drive kinematics:
+- State vector: `[x, y, yaw]`
+- `predict(v, w, dt)` — kinematic model step; updates covariance via Jacobian `F`
+- `update(meas_x, meas_y, meas_yaw)` — lighthouse correction; identity `H` matrix
+- `get_state()` → `(x, y, yaw)`
+- Tunable: process noise `Q`, measurement noise `R` (lighthouse is very accurate → small `R`)
 
 ### `robot/motor_control.py`
-- Serial setup (`/dev/ttyAMA2`, 115200 baud)
-- `drive_to_target(target_x, target_y, position, rotation_vec)` — unchanged logic, target passed as parameter
-- `stop_motors()` — sends `0,0\n`
-- Gains (`Kv`, `Kh`) and safety caps (`MAX_V`, `MAX_W`) remain unchanged
+- Serial setup (`/dev/ttyS0`, 115200 baud — **motors only; lighthouse UART is `/dev/ttyAMA2`**)
+- `go_to_position(x, y, theta)` → `(v, w)` — proportional heading + distance control
+- `pure_pursuit(x, y, theta)` → `(v, w)` — lookahead-based path follower along `TARGET_LIST`; smoother for multi-waypoint navigation
+- `stop_motors()` — sends `0.00,0.00\n`
+- Gains (`Kv`, `Kh`) and safety caps (`MAX_V`, `MAX_W`, `STOP_DIST`) as module-level constants
 
 ### `robot/broker_client.py`
 - Async WebSocket client
@@ -157,19 +177,32 @@ Pure extraction of lighthouse logic from `decodeV2pos.py`:
 - Tracks `last_contact` timestamp; signals timeout to agent
 
 ### `robot/agent.py`
-Main loop (simplified):
+Fixed-rate 20 Hz control loop (sensor runs in a separate background thread):
 ```
 load config (robot ID, broker address)
-start broker_client in background thread
-current_algorithm = idle
-current_target = None
 
-loop (lighthouse serial):
-    position, rotation_vec = localization.process_frame(frame)
-    broker_client.publish_position(position)
+sensor = LighthouseSensor("/dev/ttyAMA2")
+start sensor.run_continuous_reading() in daemon thread
+
+start broker_client in background thread
+
+ekf = ExtendedKalmanFilter()
+current_algorithm = idle
+current_v, current_w = 0, 0
+
+loop at 20 Hz (DT = 0.05 s):
+    ekf.predict(current_v, current_w, DT)
+
+    if sensor.check_new_data():
+        x, y, yaw = sensor.get_latest_reading()
+        ekf.update(x, y, yaw)
+        broker_client.publish_position(x, y, yaw)
+
+    est_x, est_y, est_yaw = ekf.get_state()
 
     if broker_client.timed_out():
         stop_motors()
+        current_v, current_w = 0, 0
         continue
 
     if broker_client.has_new_algorithm():
@@ -177,7 +210,14 @@ loop (lighthouse serial):
 
     all_positions = broker_client.get_latest_state()
     target = current_algorithm.compute_target(my_id, all_positions)
-    motor_control.drive_to_target(target, position, rotation_vec)
+    if target is None:
+        current_v, current_w = 0, 0
+        stop_motors()
+    else:
+        current_v, current_w = pure_pursuit(est_x, est_y, est_yaw)
+        send motor command (current_v, current_w)
+
+    sleep(remaining time to fill DT)
 ```
 
 ### `robot/algorithms/base.py`
@@ -222,7 +262,7 @@ class SwarmAlgorithm:
 - **Fleet panel**: one row per robot — hostname, online/offline badge, last seen position, per-robot deploy/start/stop buttons; group action buttons (Deploy All, Start All, Stop All)
 - **Algorithm panel**: dropdown of available algorithms, Run button
 - **Log panel**: streaming status/output from fleet manager and broker
-- *(Later)* 2D canvas visualization of robot positions
+- **Map panel**: 2D canvas showing live robot positions (dots) and formation targets; updated on each `/ws/ui` position message
 
 ---
 
@@ -230,17 +270,16 @@ class SwarmAlgorithm:
 
 | Phase | Work |
 |---|---|
-| **1** | Refactor `decodeV2pos.py` → `localization.py` + `motor_control.py` + `agent.py`; update `deck.sh` to call `agent.py` |
+| **1** | Refactor reference files → `localization.py` (LighthouseSensor class) + `ekf.py` + `motor_control.py` (pure_pursuit) + `agent.py` (fixed-rate 20 Hz loop); update `deck.sh` to call `agent.py` |
 | **2** | Add `broker_client.py` with timeout logic; add `algorithms/` (`idle`, `pentagon`); full robot-side stack |
 | **3** | Build `host/broker.py` + `host/fleet_manager.py` + `host/main.py` (FastAPI backend) |
-| **4** | Build `web/` UI (fleet panel, algorithm panel, log panel) |
+| **4** | Build `web/` UI (fleet panel, algorithm panel, log panel, 2D live map canvas) |
 | **5** | `fleet.yaml`, `requirements-*.txt`, SSH key setup docs, end-to-end test |
 | **6** | Additional algorithms (foraging, etc.) as needed |
 
 ---
 
 ## Future / Out of Scope for Now
-- Live 2D position visualization (map view)
 - Direct keyboard teleoperation of a single robot from host
 - Per-robot gain tuning from UI
 - Monitoring / metrics dashboard
