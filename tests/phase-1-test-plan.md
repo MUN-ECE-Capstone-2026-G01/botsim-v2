@@ -21,6 +21,7 @@ scp deck.sh visor@civr-1.local:~/deck.sh
 ```
 
 Verify files landed:
+
 ```bash
 ssh visor@civr-1.local "ls ~/botsim/robot/"
 # Expected: agent.py  ekf.py  localization.py  motor_control.py
@@ -31,6 +32,7 @@ ssh visor@civr-1.local "ls ~/botsim/robot/"
 ## Test 1 — Import sanity (no hardware needed yet)
 
 SSH into the Pi and run:
+
 ```bash
 ssh visor@civr-1.local
 cd ~/botsim
@@ -52,6 +54,7 @@ print('imports OK')
 ## Test 2 — EKF unit check (no hardware)
 
 Run on the Pi (or laptop):
+
 ```bash
 python3 - <<'EOF'
 import sys; sys.path.insert(0, 'robot')
@@ -80,6 +83,7 @@ EOF
 ## Test 3 — Serial port reachable
 
 On the Pi:
+
 ```bash
 python3 -c "import serial; s = serial.Serial('/dev/ttyS0', 115200, timeout=0.01); print('ttyS0 OK'); s.close()"
 ```
@@ -91,6 +95,7 @@ python3 -c "import serial; s = serial.Serial('/dev/ttyS0', 115200, timeout=0.01)
 ## Test 4 — Sensor read (lighthouse data, no motors)
 
 Flash the lighthouse FPGA first, then test the sensor class in isolation:
+
 ```bash
 # Flash (same as deck.sh does)
 source ~/Desktop/lighthousedeck/venv/bin/activate
@@ -121,6 +126,7 @@ EOF
 ```
 
 **Pass criteria:**
+
 - At least several readings arrive within 10 seconds
 - x, y, yaw values are plausible (not all zeros, not NaN)
 - y value should roughly match physical distance from base station
@@ -130,6 +136,7 @@ EOF
 ## Test 5 — EKF + sensor integration (no motors)
 
 Runs the EKF predict/update loop without sending motor commands:
+
 ```bash
 python3 - <<'EOF'
 import sys, time, threading
@@ -161,6 +168,7 @@ EOF
 ```
 
 **Pass criteria:**
+
 - EKF output tracks lighthouse readings
 - EKF state does not drift wildly between updates
 - No crashes
@@ -177,6 +185,7 @@ The robot will drive toward `(0.0, 1.7)` then `(0.0, 0.8)` and cycle.
 ```
 
 Or manually:
+
 ```bash
 source ~/Desktop/lighthousedeck/venv/bin/activate
 cd ~/Desktop/lighthousedeck/lighthouse-fpga
@@ -186,6 +195,7 @@ python3 ~/botsim/robot/agent.py /dev/ttyAMA2
 ```
 
 **Pass criteria:**
+
 - Robot localizes (Lighthouse readings printed within a few seconds)
 - Robot moves toward the first waypoint `(0.0, 1.7)`
 - Robot slows and stops when it reaches the waypoint (~0.1 m)
@@ -193,6 +203,7 @@ python3 ~/botsim/robot/agent.py /dev/ttyAMA2
 - `Ctrl+C` stops the robot cleanly (motors stop, no error)
 
 **Things to observe:**
+
 - `Lighthouse x=... y=... yaw=...` lines appear continuously
 - `Target (0.0, 1.7) reached!` prints when waypoint is hit
 - No serial errors or crashes during a 1-minute run
