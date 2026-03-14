@@ -31,19 +31,25 @@ DT        = 1.0 / LOOP_FREQ
 # Driving constants
 # ---------------------------------------------------------------------------
 
-Kv        = 0.35
-Kh        = 2.0
+Kv        = 0.2
+Kh        = 5.0
 MAX_V     = 0.5    # m/s
 MAX_W     = 4.0    # rad/s
 STOP_DIST = 0.1    # m — consider target reached within this radius
 
 LOOKAHEAD_DIST = 0.4  # m — pure pursuit lookahead
 
+# Whether to negate forward velocity before sending to the ESP32.
+# Depends on motor wiring polarity — set per robot in fleet.yaml.
+# Phase 2: config.py will set this from fleet.yaml at startup.
+INVERT_V = True
+
 # ---------------------------------------------------------------------------
 # Phase 1 waypoints (replaced by algorithm target in Phase 2)
 # ---------------------------------------------------------------------------
 
-TARGET_LIST = [(0.0, 1.7), (0.0, 0.8)]
+# TARGET_LIST = [(0.0, 1.7), (0.0, 0.8)]
+TARGET_LIST = [(-0.5, 0.4), (0.5, 0.4)]
 current_target_idx = 0
 
 
@@ -57,7 +63,12 @@ def stop_motors():
 
 
 def send_command(v, w):
-    """Send a velocity command. w is negated to match ESP32 convention."""
+    """Send a velocity command.
+    v is negated if INVERT_V is set (motor wiring polarity).
+    w is negated to match ESP32 angular convention.
+    """
+    if INVERT_V:
+        v = -v
     cmd = f"{v:.2f},{-w:.2f}\n"
     ser.write(cmd.encode())
 

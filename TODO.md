@@ -42,7 +42,7 @@ Work through these steps in order. Each step is small enough to implement and te
   - Accepts lighthouse serial port as CLI argument
 - [x] **1.5** Update `deck.sh` to call `robot/agent.py` instead of `Lighthouse-Deck/tools/decodeV2pos.py`
   - Note: shape-deployer eliminated deck.sh entirely and inlines the reboot/flash/start commands via SSH. We may do the same in Phase 3 (fleet_manager.py can issue the three commands directly).
-- [ ] **1.6** Smoke test: deploy `robot/` manually to one Pi and verify it drives to the hardcoded target as before
+- [x] **1.6** Smoke test: deploy `robot/` manually to one Pi and verify it drives to the hardcoded target as before
 
 ---
 
@@ -52,8 +52,9 @@ Work through these steps in order. Each step is small enough to implement and te
 
 - [ ] **2.1** Create `fleet.yaml` at repo root with placeholder values:
   - `broker_host`, `broker_port` (default 8765), `broker_timeout` (default 5)
-  - List of robots: `id`, `host`, `user`
-- [ ] **2.2** Create `robot/config.py` — reads robot ID and broker connection info from a local config file on the Pi (a copy of `fleet.yaml` deployed there, or a small `robot_config.yaml`)
+  - List of robots: `id`, `host`, `user`, `invert_v` (bool — negate forward velocity for motor wiring polarity)
+- [ ] **2.2** Create `robot/config.py` — reads robot ID and per-robot settings from a local config file on the Pi (a copy of `fleet.yaml` deployed there, or a small `robot_config.yaml`):
+  - On startup, set `motor_control.INVERT_V` from the robot's `invert_v` field
 - [ ] **2.3** Create `robot/algorithms/base.py` — abstract `SwarmAlgorithm` class:
   ```python
   def compute_target(self, my_id: str, all_positions: dict) -> tuple[float, float]
