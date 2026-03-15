@@ -20,7 +20,23 @@ else
     echo -e "127.0.1.1\t$HOSTNAME" | sudo tee -a /etc/hosts
 fi
 
-echo "=== Ensuring avahi-daemon is enabled and running ==="
+echo "=== Ensuring SSH server is enabled and running ==="
+sudo systemctl enable ssh
+sudo systemctl start ssh
+
+echo "=== Ensuring avahi-daemon is installed ==="
+if ! dpkg -s avahi-daemon &>/dev/null; then
+    echo "avahi-daemon not found, installing..."
+    sudo apt-get install -y avahi-daemon
+fi
+
+echo "=== Configuring avahi to use wlan0 only (prevents hostname conflict from multiple interfaces) ==="
+sudo sed -i 's/^#*allow-interfaces=.*/allow-interfaces=wlan0/' /etc/avahi/avahi-daemon.conf
+# If the line doesn't exist at all, add it under [server]
+if ! grep -q "^allow-interfaces=" /etc/avahi/avahi-daemon.conf; then
+    sudo sed -i '/^\[server\]/a allow-interfaces=wlan0' /etc/avahi/avahi-daemon.conf
+fi
+
 sudo systemctl enable avahi-daemon
 sudo systemctl restart avahi-daemon
 
