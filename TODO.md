@@ -95,30 +95,32 @@ Work through these steps in order. Each step is small enough to implement and te
 
 **Goal:** FastAPI server that acts as broker, fleet manager, and REST API.
 
-- [ ] **3.1** Create `host/broker.py` — WebSocket connection manager:
+- [x] **3.1** Create `host/broker.py` — WebSocket connection manager:
   - Maintains dict of connected Pi clients (`robot_id → websocket`)
   - Maintains `positions` dict (latest position per robot)
   - On position message from Pi: update `positions`, broadcast updated state to all Pis and all UI clients
   - On algorithm command (from UI endpoint): broadcast `{"type": "algorithm", "name": "..."}` to all Pis
   - On Pi disconnect: mark robot offline in state
-- [ ] **3.2** Create `host/fleet_manager.py` using `asyncssh`:
+  - Also broadcasts `{"type": "log", "message": "..."}` to UI clients for fleet operation output
+- [x] **3.2** Create `host/fleet_manager.py` using `paramiko` (wrapped in `run_in_executor`):
   - Load fleet from `fleet.yaml`
-  - `deploy(robot_id)` — rsync `robot/` directory to Pi (to `~/botsim/`)
-  - `start(robot_id)` — SSH: run `deck.sh` in background, capture output
+  - `deploy(robot_id)` — SCP `robot/` directory + `fleet.yaml` to Pi (`~/botsim/`) via SFTP
+  - `start(robot_id)` — SSH: inline lighthouse flash (reboot → bootloader → bin), then launch agent as background daemon
   - `stop(robot_id)` — SSH: `pkill -f agent.py`
   - `deploy_all()`, `start_all()`, `stop_all()` — run concurrently with `asyncio.gather`
-  - SSH credentials: read from `.env` file (password) or use key auth if available
-- [ ] **3.3** Create `host/main.py` — FastAPI app:
-  - Mount `web/` as static files
-  - Include all REST endpoints (see PLAN.md for full list)
-  - `GET /robots` → returns fleet status from broker state
-  - `POST /robots/{id}/deploy|start|stop` → calls fleet_manager
+  - SSH credentials: `SSH_PASSWORD` env var from `.env`
+- [x] **3.3** Create `host/main.py` — FastAPI app:
+  - Mount `web/` as static files (when directory exists)
+  - `GET /robots` → fleet status from broker state
+  - `POST /robots/{id}/deploy|start|stop` → calls fleet_manager, broadcasts log to UI
   - `POST /robots/deploy_all|start_all|stop_all` → calls fleet_manager
-  - `POST /algorithm` → calls broker to broadcast algorithm switch
-  - `WebSocket /ws/robot` → Pi agents connect here (handled by broker)
-  - `WebSocket /ws/ui` → browser connects here (broker pushes updates)
-- [ ] **3.4** Create `requirements-host.txt` (fastapi, uvicorn, asyncssh, pyyaml, python-dotenv, websockets)
-- [ ] **3.5** Test backend standalone: start FastAPI server, manually connect a WebSocket client, verify broker fans out messages correctly
+  - `POST /algorithm` → broker broadcasts algorithm switch to all Pis
+  - `WebSocket /ws/robot` → Pi agents connect here
+  - `WebSocket /ws/ui` → browser connects here for live state + log updates
+- [x] **3.4** Create `requirements-host.txt` and update `pyproject.toml` (fastapi, uvicorn, paramiko, pyyaml, python-dotenv)
+- [x] **3.5** Create `.env.example` with `SSH_PASSWORD` placeholder
+- [x] **3.6** Add lighthouse Pi paths to `fleet.yaml` (venv_path, reboot_script_path, bootloader_script_path, lighthouse_bin_path, lighthouse_uart)
+- [x] **3.7** Test backend: see `tests/phase-3-test-plan.md`
 
 ---
 

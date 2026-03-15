@@ -239,10 +239,12 @@ class SwarmAlgorithm:
 - On algorithm command from UI: broadcast `{"type": "algorithm", "name": "..."}` to all Pis
 
 ### `host/fleet_manager.py`
-- `deploy(robot_id)` — rsync `robot/` directory to Pi home folder
-- `start(robot_id)` — SSH: run `deck.sh` (full init + agent)
-- `stop(robot_id)` — SSH: kill `agent.py` process
-- `deploy_all()`, `start_all()`, `stop_all()` — parallel across fleet
+- Uses `paramiko` (same approach as shape-deployer) wrapped in `asyncio.run_in_executor`
+- `deploy(robot_id)` — SFTP upload `robot/` + `fleet.yaml` to `~/botsim/` on Pi (SCP; rsync not available)
+- `start(robot_id)` — SSH: inline lighthouse flash (reboot → bootloader → bin), then launch `agent.py` as background daemon (replaces `deck.sh`)
+- `stop(robot_id)` — SSH: `pkill -f agent.py`
+- `deploy_all()`, `start_all()`, `stop_all()` — parallel across fleet via `asyncio.gather`
+- SSH password from `SSH_PASSWORD` env var (`.env` file, gitignored)
 
 ### `host/main.py` — FastAPI endpoints
 | Method | Path | Description |

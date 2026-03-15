@@ -6,6 +6,13 @@ broker_host: "192.168.78.83"
 broker_port: 8765
 broker_timeout: 5              # seconds before robot stops if broker unreachable
 
+# Paths on each Pi for lighthouse init (used by fleet_manager start)
+venv_path:              "~/Desktop/lighthousedeck/venv"
+reboot_script_path:     "~/Desktop/lighthousedeck/lighthouse-fpga/tools/reboot.py"
+bootloader_script_path: "~/Desktop/lighthousedeck/lighthouse-bootloader/scripts/uart_bootloader.py"
+lighthouse_bin_path:    "~/Desktop/lighthousedeck/lighthouse-fpga/lighthouse.bin"
+lighthouse_uart:        "/dev/ttyAMA2"
+
 robots:
   - id: civr-1
     host: civr-1.local
