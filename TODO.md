@@ -128,29 +128,19 @@ Work through these steps in order. Each step is small enough to implement and te
 
 **Goal:** Single-page browser interface for fleet management and algorithm control.
 
-- [ ] **4.1** Create `web/index.html` — page structure:
-  - Fleet panel (robot table)
-  - Algorithm panel (dropdown + Run button)
-  - Log panel (scrolling text output)
-  - Map panel (`<canvas>` element for 2D live visualization)
-- [ ] **4.2** Create `web/app.js`:
-  - On load: `GET /robots` to populate fleet table
-  - Open WebSocket to `/ws/ui` for live updates
-  - On WS message: update robot rows (status, position)
-  - Wire up per-robot buttons (deploy, start, stop)
-  - Wire up group buttons (Deploy All, Start All, Stop All)
-  - Wire up algorithm dropdown + Run button → `POST /algorithm`
-  - Append status messages to log panel
-  - On WS position message: redraw map canvas (robot dots + formation target markers)
-- [ ] **4.3** Create `web/style.css` — minimal clean styling:
-  - Online/offline color badges per robot
-  - Responsive layout
-- [ ] **4.4** Implement map canvas in `web/app.js`:
-  - `<canvas>` with a fixed world-space viewport (e.g. ±2 m from origin)
-  - Each robot drawn as a labeled dot; heading shown as a short line
-  - Formation target vertices drawn as hollow circles (if algorithm is active)
-  - Redraws on every incoming WS state message (~20 Hz)
-- [ ] **4.5** Test UI in browser: verify fleet table updates live, buttons trigger correct API calls, log panel shows output, map shows robot positions moving in real time
+- [x] **4.1** Create `web/index.html` — Fleet panel, Algorithm panel, Log panel, Map canvas
+- [x] **4.2** Create `web/app.js`:
+  - On load: `GET /robots` to populate fleet table; seed map from initial state
+  - WebSocket to `/ws/ui` with auto-reconnect (3s delay)
+  - On state message: update fleet table (online/offline badge, live position), redraw map
+  - On log message: append to log panel with timestamp
+  - Per-robot Deploy/Start/Stop buttons; group Deploy All/Start All/Stop All
+  - Algorithm dropdown + Run → `POST /algorithm`; updates map targets
+  - Pentagon formation targets computed client-side (centroid + 0.5 m radius)
+  - Log panel capped at 200 lines, auto-scrolls
+- [x] **4.3** Create `web/style.css` — two-column layout, online/offline badges, dark log panel
+- [x] **4.4** Map canvas (±2.5 m viewport, 0.5 m grid, robot dots with heading lines, pentagon target circles)
+- [ ] **4.5** Test UI: see `tests/phase-4-test-plan.md`
 
 ---
 

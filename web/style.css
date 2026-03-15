@@ -1,0 +1,179 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, sans-serif;
+  background: #f4f4f5;
+  color: #18181b;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+h1 {
+  font-size: 1.6rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+h2 {
+  font-size: 1.05rem;
+  margin-bottom: 1rem;
+  color: #3f3f46;
+}
+
+section {
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────── */
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 1.25rem;
+  align-items: start;
+}
+
+.left-col  { min-width: 0; }
+.right-col { flex-shrink: 0; }
+
+/* ── Badges ──────────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.badge-online  { background: #dcfce7; color: #15803d; }
+.badge-offline { background: #fee2e2; color: #b91c1c; }
+.badge-ws-ok   { background: #dbeafe; color: #1d4ed8; }
+
+/* ── Fleet table ─────────────────────────────────────────────────────── */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+th {
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  background: #f4f4f5;
+  border-bottom: 1px solid #e4e4e7;
+  color: #52525b;
+  font-weight: 600;
+}
+
+td {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid #f4f4f5;
+  vertical-align: middle;
+}
+
+.pos-cell {
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: #52525b;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+
+button {
+  padding: 0.4rem 0.9rem;
+  border: none;
+  border-radius: 5px;
+  background: #6366f1;
+  color: #fff;
+  font-size: 0.88rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:hover:not(:disabled) { background: #4f46e5; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+button.btn-sm {
+  padding: 0.28rem 0.65rem;
+  font-size: 0.82rem;
+}
+
+button.btn-danger { background: #dc2626; }
+button.btn-danger:hover:not(:disabled) { background: #b91c1c; }
+
+button.btn-neutral { background: #71717a; }
+button.btn-neutral:hover:not(:disabled) { background: #52525b; }
+
+.btn-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.action-btns {
+  display: flex;
+  gap: 0.35rem;
+}
+
+/* ── Algorithm panel ─────────────────────────────────────────────────── */
+
+.algo-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #d4d4d8;
+  border-radius: 5px;
+  font-size: 0.95rem;
+  background: #fafafa;
+}
+
+select:focus { outline: 2px solid #6366f1; outline-offset: 1px; }
+
+.algo-status { font-size: 0.88rem; color: #52525b; }
+.algo-status span { font-weight: 600; color: #18181b; }
+
+/* ── Map canvas ──────────────────────────────────────────────────────── */
+
+#map {
+  display: block;
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.map-hint { font-size: 0.8rem; color: #a1a1aa; font-weight: 400; }
+
+/* ── Log panel ───────────────────────────────────────────────────────── */
+
+#log-panel {
+  height: 180px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 0.82rem;
+  background: #18181b;
+  color: #a1a1aa;
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  line-height: 1.5;
+}
+
+.log-line { margin: 0; }
+.log-line.log-ok   { color: #86efac; }
+.log-line.log-err  { color: #fca5a5; }
+.log-line.log-info { color: #93c5fd; }

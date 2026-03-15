@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>botsim-v2</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>botsim-v2 <span id="ws-status" class="badge badge-offline">disconnected</span></h1>
+
+  <div class="layout">
+
+    <!-- ── Left column ─────────────────────────────────────────────────── -->
+    <div class="left-col">
+
+      <!-- Fleet panel -->
+      <section>
+        <h2>Fleet</h2>
+        <table id="fleet-table">
+          <thead>
+            <tr>
+              <th>Robot</th>
+              <th>Status</th>
+              <th>Position</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="btn-row">
+          <button id="btn-deploy-all">Deploy All</button>
+          <button id="btn-start-all">Start All</button>
+          <button id="btn-stop-all">Stop All</button>
+        </div>
+      </section>
+
+      <!-- Algorithm panel -->
+      <section>
+        <h2>Algorithm</h2>
+        <div class="algo-row">
+          <select id="algo-select">
+            <option value="idle">idle</option>
+            <option value="pentagon">pentagon</option>
+          </select>
+          <button id="btn-run-algo">Run</button>
+        </div>
+        <p class="algo-status">Active: <span id="algo-active">—</span></p>
+      </section>
+
+    </div>
+
+    <!-- ── Right column — map ───────────────────────────────────────────── -->
+    <div class="right-col">
+      <section>
+        <h2>Map <span class="map-hint">(±2.5 m)</span></h2>
+        <canvas id="map" width="420" height="420"></canvas>
+      </section>
+    </div>
+
+  </div>
+
+  <!-- Log panel -->
+  <section>
+    <h2>Log</h2>
+    <div id="log-panel"></div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -141,6 +141,7 @@ async def ws_robot(websocket: WebSocket):
         if robot_id:
             broker.unregister_robot(robot_id)
             await broker.broadcast_log(f"[{robot_id}] disconnected")
+            await broker.broadcast_disconnect(robot_id)
 
 
 # ---------------------------------------------------------------------------
