@@ -58,9 +58,9 @@ class BrokerState:
     # Outbound broadcasts
     # -----------------------------------------------------------------------
 
-    async def broadcast_algorithm(self, name: str):
+    async def broadcast_algorithm(self, name: str, params: dict = {}):
         """Send an algorithm-switch command to all connected Pi agents."""
-        msg = json.dumps({"type": "algorithm", "name": name})
+        msg = json.dumps({"type": "algorithm", "name": name, "params": params})
         for ws in list(self._robots.values()):
             await _try_send(ws, msg)
 

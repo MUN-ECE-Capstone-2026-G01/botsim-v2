@@ -5,6 +5,14 @@
 broker_host: "192.168.78.83"
 broker_port: 8765
 broker_timeout: 5              # seconds before robot stops if broker unreachable
+trajectory_cleanup_delay: 10   # seconds after arrival before trail is cleared from UI map
+
+color_palette:
+  red:    "#e74c3c"
+  blue:   "#3498db"
+  green:  "#2ecc71"
+  yellow: "#f1c40f"
+  white:  "#aaaaaa"            # grey substitute (pure white invisible on light backgrounds)
 
 # Paths on each Pi for lighthouse init (used by fleet_manager start)
 venv_path:              "~/Desktop/lighthousedeck/venv"
@@ -14,14 +22,16 @@ lighthouse_bin_path:    "~/Desktop/lighthousedeck/lighthouse-fpga/lighthouse.bin
 lighthouse_uart:        "/dev/ttyAMA2"
 
 robots:
-  - id: civr-1
-    host: civr-1.local
+  - id: civr-white
+    host: civr-white.local
     user: visor
     invert_v: true             # negate forward velocity (depends on motor wiring)
-  # - id: civr-2
-  #   host: civr-2.local
-  #   user: visor
-  #   invert_v: false
+    color: white
+  - id: civr-blue
+    host: civr-blue.local
+    user: visor
+    invert_v: true
+    color: blue
   # - id: civr-3
   #   host: civr-3.local
   #   user: visor
@@ -35,6 +45,3 @@ robots:
   #   user: visor
   #   invert_v: false
   # - id: civr-6
-  #   host: civr-6.local
-  #   user: visor
-  #   invert_v: false

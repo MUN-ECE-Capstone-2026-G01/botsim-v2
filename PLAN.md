@@ -18,19 +18,66 @@ A web-based platform for orchestrating a fleet of differential-drive robots (Ras
 
 ## Architecture
 
-```
-[Browser] <── REST/WebSocket ──> [Host: FastAPI]
-                                       │
-                             ┌─────────┴──────────┐
-                             │ SSH (deploy/start)  │ WebSocket broker (/ws/robot)
-                             │                     │
-                        [Pi-1 ... Pi-N]      positions in ↑  ↓ global state + algorithm
-                        agent.py
-                             │
-                    ┌────────┴────────┐
-               localization.py   motor_control.py
-                    │                 │
-              [Lighthouse FPGA]   [ESP32 / UART]
+```mermaid
+flowchart TB
+    subgraph BROWSER["Browser"]
+        UI["Web UI\nFleet panel · Map canvas · Log\nAlgorithm panel · Theme toggle"]
+    end
+
+    subgraph HOST["Host Laptop"]
+        subgraph FASTAPI["FastAPI  :8765"]
+            MAIN["main.py\nREST endpoints · WS endpoints"]
+            BROKER["broker.py\nBrokerState\npositions · UI clients · robot clients"]
+            FM["fleet_manager.py\nFleetManager\nparamiko SSH/SFTP"]
+        end
+        FLEET[("fleet.yaml\nbroker_host · broker_port\ncolor_palette · robots")]
+    end
+
+    subgraph PI["Raspberry Pi  ×N"]
+        subgraph AGENT["agent.py  20 Hz control loop"]
+            EKF["ekf.py\nExtendedKalmanFilter\npredict · update · get_state"]
+            ALGO["algorithms/\nidle · pentagon · shapes"]
+        end
+        LOC["localization.py\nLighthouseSensor\n(daemon thread)"]
+        BC["broker_client.py\nBrokerClient\n(async daemon thread)"]
+        MC["motor_control.py\ngo_to_target · stop_motors"]
+        PIFLEET[("fleet.yaml\nrobot copy")]
+    end
+
+    subgraph HW["Robot Hardware"]
+        BS["Steam Base Stations\n(IR infrared)"]
+        LHFPGA["/dev/ttyAMA2\nLighthouse FPGA\n230400 baud"]
+        ESP32["/dev/ttyS0\nESP32 Motor Driver\n115200 baud"]
+    end
+
+    %% Browser ↔ FastAPI
+    UI <-->|"WebSocket /ws/ui\nstate updates · log messages"| BROKER
+    UI -->|"REST  GET /robots · GET /config\nPOST /algorithm\nPOST /robots/{id}/deploy|start|stop"| MAIN
+
+    %% Host internals
+    MAIN --- BROKER
+    MAIN --- FM
+    FLEET -.->|"loaded at startup"| FASTAPI
+
+    %% Host → Pi: fleet management
+    FM -->|"SFTP  robot/ + fleet.yaml\nSSH  reboot · flash · agent.py"| PI
+
+    %% Host ↔ Pi: broker WebSocket
+    BROKER <-->|"WebSocket /ws/robot\npositions ↑\nstate + algorithm ↓"| BC
+
+    %% Pi internals
+    BC <-->|"pending algorithm\nall_positions"| AGENT
+    AGENT --- EKF
+    AGENT --- ALGO
+    ALGO -->|"target (tx, ty)"| AGENT
+    LOC -->|"x, y, yaw\n(thread-safe)"| AGENT
+    AGENT -->|"v, ω"| MC
+    PIFLEET -.->|"robot_id · broker_addr\ninvert_v"| AGENT
+
+    %% Hardware
+    BS -->|"IR sweeps"| LHFPGA
+    LHFPGA -->|"UART raw sweep data"| LOC
+    MC -->|"UART  v,w commands"| ESP32
 ```
 
 ### Host responsibilities (runtime)
@@ -128,15 +175,25 @@ These are two distinct ports and must not be confused.
 broker_host: "192.168.x.x"    # Host laptop IP — set before deploying
 broker_port: 8765
 broker_timeout: 5              # Seconds before robot stops if broker unreachable
+trajectory_cleanup_delay: 3   # Seconds after arrival before trail is cleared from UI map
+
+color_palette:                 # Named colors available for robot assignment
+  red:    "#e74c3c"
+  blue:   "#3498db"
+  green:  "#2ecc71"
+  yellow: "#f1c40f"
+  white:  "#aaaaaa"            # Grey substitute (pure white is invisible on light backgrounds)
 
 robots:
-  - id: civr-1
-    host: civr-1.local
+  - id: civr-white
+    host: civr-white.local
     user: visor
-  - id: civr-2
-    host: civr-2.local
+    color: white               # References color_palette key
+  - id: civr-blue
+    host: civr-blue.local
     user: visor
-  # ... up to civr-6
+    color: blue
+  # ... color is optional — UI auto-assigns from palette in definition order if omitted
 ```
 
 ---
@@ -264,7 +321,11 @@ class SwarmAlgorithm:
 - **Fleet panel**: one row per robot — hostname, online/offline badge, last seen position, per-robot deploy/start/stop buttons; group action buttons (Deploy All, Start All, Stop All)
 - **Algorithm panel**: dropdown of available algorithms, Run button
 - **Log panel**: streaming status/output from fleet manager and broker
-- **Map panel**: 2D canvas showing live robot positions (dots) and formation targets; updated on each `/ws/ui` position message
+- **Map panel**: 2D canvas showing live robot positions (dots with heading lines), historical trajectory trails, and formation target crosses; each robot rendered in its configured color; updated on each `/ws/ui` position message
+  - Robot dot and heading line: robot's color
+  - Historical trail: lighter/semi-transparent variant of robot's color; accumulates past positions client-side
+  - Target cross (×): darker variant of robot's color; drawn at the robot's assigned formation vertex
+  - Trail cleared when robot has reached target **and** `trajectory_cleanup_delay` seconds have elapsed (whichever is later)
 
 ---
 
@@ -276,8 +337,8 @@ class SwarmAlgorithm:
 | **2** | Add `broker_client.py` with timeout logic; add `algorithms/` (`idle`, `pentagon`); full robot-side stack |
 | **3** | Build `host/broker.py` + `host/fleet_manager.py` + `host/main.py` (FastAPI backend) |
 | **4** | Build `web/` UI (fleet panel, algorithm panel, log panel, 2D live map canvas) |
-| **5** | `fleet.yaml`, `requirements-*.txt`, SSH key setup docs, end-to-end test |
-| **6** | Additional algorithms (foraging, etc.) as needed |
+| **5** | Additional algorithms (foraging, etc.) as needed |
+| **6** | Collision avoidance: repulsion-based velocity modification on-Pi |
 
 ---
 
@@ -285,3 +346,4 @@ class SwarmAlgorithm:
 - Direct keyboard teleoperation of a single robot from host
 - Per-robot gain tuning from UI
 - Monitoring / metrics dashboard
+- Collision avoidance (planned for Phase 7)

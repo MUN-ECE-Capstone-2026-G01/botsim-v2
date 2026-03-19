@@ -2,11 +2,13 @@
 # FastAPI application — broker + fleet manager + REST API.
 #
 # Start with:
-#   uv run uvicorn host.main:app --host 0.0.0.0 --port 8000
+#   uv run uvicorn host.main:app --host 0.0.0.0 --port 8765
+#
+# Port must match broker_port in fleet.yaml (robots connect to ws://host:8765/ws/robot)
 #
 # WebSocket endpoints:
-#   ws://host:8000/ws/robot  — Pi agents connect here
-#   ws://host:8000/ws/ui     — Browser clients connect here
+#   ws://host:8765/ws/robot  — Pi agents connect here
+#   ws://host:8765/ws/ui     — Browser connects here
 #
 # REST endpoints: see PLAN.md
 
@@ -38,18 +40,34 @@ fleet_manager = FleetManager(fleet)
 
 app = FastAPI(title="botsim-v2")
 
-# Serve web/ as static files (populated in Phase 4)
-if _WEB_PATH.exists():
-    app.mount("/web", StaticFiles(directory=str(_WEB_PATH), html=True), name="web")
-
 
 # ---------------------------------------------------------------------------
 # REST — fleet status
 # ---------------------------------------------------------------------------
 
+@app.get("/config")
+async def get_config():
+    return {
+        "trajectory_cleanup_delay": fleet.get("trajectory_cleanup_delay", 3),
+        "color_palette": fleet.get("color_palette", {}),
+    }
+
+
 @app.get("/robots")
 async def get_robots():
-    return broker.get_fleet_status(fleet["robots"])
+    palette  = fleet.get("color_palette", {})
+    fallback = list(palette.values())
+    robots   = fleet["robots"]
+    status   = broker.get_fleet_status(robots)
+    for i, (r, s) in enumerate(zip(robots, status)):
+        color_name = r.get("color")
+        if color_name and color_name in palette:
+            s["color"] = palette[color_name]
+        elif fallback:
+            s["color"] = fallback[i % len(fallback)]
+        else:
+            s["color"] = "#6366f1"
+    return status
 
 
 # ---------------------------------------------------------------------------
@@ -108,13 +126,15 @@ async def stop_robot(robot_id: str):
 # ---------------------------------------------------------------------------
 
 class AlgorithmRequest(BaseModel):
-    name: str
+    name:   str
+    params: dict = {}
 
 
 @app.post("/algorithm")
 async def set_algorithm(req: AlgorithmRequest):
-    await broker.broadcast_algorithm(req.name)
-    await broker.broadcast_log(f"Algorithm → {req.name}")
+    await broker.broadcast_algorithm(req.name, req.params)
+    params_str = f" {req.params}" if req.params else ""
+    await broker.broadcast_log(f"Algorithm → {req.name}{params_str}")
     return {"ok": True}
 
 
@@ -159,3 +179,8 @@ async def ws_ui(websocket: WebSocket):
         pass
     finally:
         broker.unregister_ui(websocket)
+
+
+# Serve web/ at root — must be last so explicit routes above take priority
+if _WEB_PATH.exists():
+    app.mount("/", StaticFiles(directory=str(_WEB_PATH), html=True), name="web")

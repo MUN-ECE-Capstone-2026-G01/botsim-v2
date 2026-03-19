@@ -140,37 +140,37 @@ Work through these steps in order. Each step is small enough to implement and te
   - Log panel capped at 200 lines, auto-scrolls
 - [x] **4.3** Create `web/style.css` — two-column layout, online/offline badges, dark log panel
 - [x] **4.4** Map canvas (±2.5 m viewport, 0.5 m grid, robot dots with heading lines, pentagon target circles)
-- [ ] **4.5** Test UI: see `tests/phase-4-test-plan.md`
+- [x] **4.5** Test UI: see `tests/phase-4-test-plan.md`
+- [x] **4.6** Add `color_palette` map and per-robot `color` name field to `fleet.yaml`:
+  - `color_palette`: defines named colors with hex values (red, blue, green, yellow, white→grey)
+  - Each robot's `color` field references a key in `color_palette` (e.g. `color: blue`)
+  - `GET /config` (or `GET /robots`) resolves the name to its hex value and includes it in the response
+  - UI auto-assigns from palette in definition order if a robot has no `color` field
+- [x] **4.7** Redesign UI using frontend-design plugin — polished, production-grade aesthetic; dark theme; improved layout and typography
+- [x] **4.8** Trajectory visualization on map canvas:
+  - Each robot accumulates a list of past (x, y) positions (historical trail)
+  - Trail drawn as a polyline in the robot's color (slightly lighter/transparent variant)
+  - Target destination drawn as a cross (×) in the robot's color (slightly darker variant)
+  - Trail is cleared when the robot has reached its target **and** `trajectory_cleanup_delay` seconds have elapsed since arrival (whichever comes later)
+  - Trail data lives client-side in `app.js`; no server changes required
+- [x] **4.9** Add `trajectory_cleanup_delay` (seconds, default 3) to `fleet.yaml`; expose it via a new `GET /config` endpoint so the UI can read it on load
+
+## Phase 5 — Additional Algorithms (ongoing)
+
+- [x] **5.1** `robot/algorithms/shapes.py` — generalized shape formation (point/line/triangle/square/pentagon/hexagon) with configurable center (x, y) and radius; same Hungarian assignment as pentagon; parameters passed via `POST /algorithm` body
+- [ ] **5.2** `robot/algorithms/rendezvous.py` — all robots converge to centroid of current positions
+- [ ] **5.3** `robot/algorithms/foraging.py` — TBD based on requirements
 
 ---
 
-## Phase 5 — Integration & Setup
+## Phase 6 — Collision Avoidance (future)
 
-**Goal:** End-to-end working system; documented setup process.
+**Goal:** Prevent robots from colliding with each other during formation movement.
 
-- [ ] **5.1** Create `.env.example` with SSH password placeholder (actual `.env` is gitignored)
-- [ ] **5.2** Add `.gitignore` (`.env`, `__pycache__`, `*.pyc`, `venv/`)
-- [ ] **5.3** Update `README.md`:
-  - Prerequisites (Python version, required packages)
-  - One-time SSH key setup instructions for each Pi
-  - How to set `broker_host` in `fleet.yaml`
-  - How to start the host server (`uvicorn host.main:app`)
-  - How to deploy and start robots from the UI
-- [ ] **5.4** End-to-end test with 1 robot:
-  - Deploy from UI → Start from UI → verify robot localizes and stays idle
-  - Select pentagon algorithm from UI → verify robot drives toward its assigned vertex
-- [ ] **5.5** End-to-end test with 2+ robots:
-  - Verify positions of all robots appear in UI
-  - Verify pentagon assignment works (nearest vertex)
-  - Verify broker timeout: kill host server → robots should stop after 5s
-
----
-
-## Phase 6 — Additional Algorithms (ongoing)
-
-- [ ] **6.1** `robot/algorithms/rendezvous.py` — all robots converge to centroid of current positions
-- [ ] **6.2** `robot/algorithms/foraging.py` — TBD based on requirements
-- [ ] **6.3** Add algorithm radius/parameter configuration to `fleet.yaml` or passed via `POST /algorithm` body
+- [ ] **6.1** Design collision avoidance strategy — likely a velocity obstacle (VO) or simple repulsion field added to the target vector before motor command is sent; decide whether this runs on-Pi (agent.py) or is factored into algorithm output
+- [ ] **6.2** Add repulsion term to `robot/motor_control.py` or as a wrapper in `robot/agent.py`: given all robot positions, compute a repulsion vector if any robot is within a configurable `collision_radius` (set in `fleet.yaml`)
+- [ ] **6.3** Add `collision_radius` (meters, default 0.25) to `fleet.yaml`
+- [ ] **6.4** Test: two robots assigned to adjacent pentagon vertices — verify they do not collide en route
 
 ---
 
