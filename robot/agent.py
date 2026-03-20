@@ -24,13 +24,21 @@ from algorithms.idle import Idle
 motor_control.INVERT_V = config.INVERT_V
 
 
-def load_algorithm(name: str):
-    """Instantiate a swarm algorithm by name."""
+def load_algorithm(name: str, params: dict = {}):
+    """Instantiate a swarm algorithm by name, forwarding any params."""
     if name == "idle":
         return Idle()
     if name == "pentagon":
         from algorithms.pentagon import Pentagon
         return Pentagon()
+    if name == "shapes":
+        from algorithms.shapes import Shapes
+        return Shapes(
+            shape    = params.get("shape",    "triangle"),
+            center_x = float(params.get("center_x", 0.0)),
+            center_y = float(params.get("center_y", 0.0)),
+            radius   = float(params.get("radius",   0.5)),
+        )
     print(f"[agent] Unknown algorithm '{name}', falling back to idle")
     return Idle()
 
@@ -95,8 +103,9 @@ if __name__ == "__main__":
             # 4. Algorithm switch
             new_algo = broker.get_new_algorithm()
             if new_algo is not None:
-                print(f"[agent] Switching algorithm → {new_algo}")
-                current_algorithm = load_algorithm(new_algo)
+                name, params = new_algo
+                print(f"[agent] Switching algorithm → {name} params={params}")
+                current_algorithm = load_algorithm(name, params)
 
             # 5. Compute target and drive
             all_positions = broker.get_latest_state()

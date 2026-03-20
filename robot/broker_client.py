@@ -22,10 +22,10 @@ class BrokerClient:
         self.uri      = f"ws://{broker_host}:{broker_port}/ws/robot"
         self.timeout  = timeout
 
-        self._lock               = threading.Lock()
-        self._positions: dict    = {}
-        self._pending_algorithm  = None   # str or None
-        self._last_contact       = None   # float (time.time()) or None
+        self._lock                        = threading.Lock()
+        self._positions: dict             = {}
+        self._pending_algorithm: tuple | None = None  # (name, params) or None
+        self._last_contact                = None   # float (time.time()) or None
 
         self._loop:   asyncio.AbstractEventLoop | None = None
         self._outbox: asyncio.Queue | None             = None
@@ -57,12 +57,12 @@ class BrokerClient:
         with self._lock:
             return dict(self._positions)
 
-    def get_new_algorithm(self) -> str | None:
-        """Consume and return a pending algorithm name, or None."""
+    def get_new_algorithm(self) -> tuple[str, dict] | None:
+        """Consume and return a pending (name, params) tuple, or None."""
         with self._lock:
-            name = self._pending_algorithm
+            pending = self._pending_algorithm
             self._pending_algorithm = None
-            return name
+            return pending
 
     def is_timed_out(self) -> bool:
         """True if broker has been unreachable for longer than timeout seconds."""
@@ -118,6 +118,8 @@ class BrokerClient:
                 with self._lock:
                     self._positions = msg["positions"]
             elif msg.get("type") == "algorithm":
+                name   = msg["name"]
+                params = msg.get("params", {})
                 with self._lock:
-                    self._pending_algorithm = msg["name"]
-                print(f"[broker] Algorithm → {msg['name']}")
+                    self._pending_algorithm = (name, params)
+                print(f"[broker] Algorithm → {name} params={params}")

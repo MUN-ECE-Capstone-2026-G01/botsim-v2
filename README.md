@@ -3,5 +3,9 @@
 Commands:
 
 ```bash
-scp -r robot/ visor@civr-1.local:~/botsim/ && scp fleet.yaml visor@civr-1.local:~/botsim/fleet.yaml && scp deck.sh visor@civr-1.local:~/deck.sh
+scp -r robot/ visor@civr-white.local:~/botsim/ && scp fleet.yaml visor@civr-white.local:~/botsim/fleet.yaml && scp deck.sh visor@civr-white.local:~/deck.sh
+```
+
+```bash
+scp -r robot/ visor@civr-blue.local:~/botsim/ && scp fleet.yaml visor@civr-blue.local:~/botsim/fleet.yaml && scp deck.sh visor@civr-blue.local:~/deck.sh
 ```

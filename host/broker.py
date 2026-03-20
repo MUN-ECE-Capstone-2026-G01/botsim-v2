@@ -58,9 +58,9 @@ class BrokerState:
     # Outbound broadcasts
     # -----------------------------------------------------------------------
 
-    async def broadcast_algorithm(self, name: str):
+    async def broadcast_algorithm(self, name: str, params: dict = {}):
         """Send an algorithm-switch command to all connected Pi agents."""
-        msg = json.dumps({"type": "algorithm", "name": name})
+        msg = json.dumps({"type": "algorithm", "name": name, "params": params})
         for ws in list(self._robots.values()):
             await _try_send(ws, msg)
 
@@ -70,13 +70,22 @@ class BrokerState:
         for ws in list(self._ui_clients):
             await _try_send(ws, msg)
 
+    async def broadcast_disconnect(self, robot_id: str):
+        """Notify UI clients that a robot went offline."""
+        await self._broadcast_state()
+
     async def _broadcast_state(self):
-        """Fan out latest positions to all Pis and all UI clients."""
-        msg = json.dumps({"type": "state", "positions": self.positions})
+        """Fan out latest positions to all Pis and all UI clients.
+        Pis receive all known positions (needed for algorithm computation).
+        UI clients receive only currently-connected robots so offline status is accurate."""
+        all_msg    = json.dumps({"type": "state", "positions": self.positions})
+        online_pos = {rid: pos for rid, pos in self.positions.items() if rid in self._robots}
+        ui_msg     = json.dumps({"type": "state", "positions": online_pos})
+
         for ws in list(self._robots.values()):
-            await _try_send(ws, msg)
+            await _try_send(ws, all_msg)
         for ws in list(self._ui_clients):
-            await _try_send(ws, msg)
+            await _try_send(ws, ui_msg)
 
     # -----------------------------------------------------------------------
     # Query

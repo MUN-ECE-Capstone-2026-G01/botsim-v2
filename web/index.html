@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>botsim-v2 — Fleet Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- Apply saved theme before first paint to avoid flash -->
+  <script>
+    (function(){var t=localStorage.getItem('theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');})();
+  </script>
+</head>
+<body>
+
+  <header>
+    <div class="header-inner">
+      <div class="header-brand">
+        <span class="brand-mark">◈</span>
+        <h1>botsim<span class="brand-v">-v2</span></h1>
+      </div>
+      <div class="header-right">
+        <button class="btn-theme" id="btn-theme" title="Toggle light/dark mode">🌙</button>
+        <div id="ws-status" class="ws-badge ws-offline">
+          <span class="ws-dot"></span>
+          <span class="ws-label">disconnected</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="grid-layout">
+
+      <!-- Left column -->
+      <div class="left-col">
+
+        <!-- Fleet panel -->
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Fleet</h2>
+            <span class="panel-tag" id="online-count">0 online</span>
+          </div>
+          <div class="table-wrap">
+            <table id="fleet-table">
+              <thead>
+                <tr>
+                  <th>Robot</th>
+                  <th>Status</th>
+                  <th>Position</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="group-actions">
+            <button class="btn btn-neutral" id="btn-deploy-all">Deploy All</button>
+            <button class="btn btn-primary" id="btn-start-all">Start All</button>
+            <button class="btn btn-danger"  id="btn-stop-all">Stop All</button>
+          </div>
+        </section>
+
+        <!-- Algorithm panel -->
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Algorithm</h2>
+            <span class="panel-tag algo-tag" id="algo-active-tag">idle</span>
+          </div>
+          <div class="algo-controls">
+            <select id="algo-select">
+              <option value="idle">idle</option>
+              <option value="shapes">shapes</option>
+            </select>
+            <button class="btn btn-primary" id="btn-run-algo">Run</button>
+          </div>
+          <div class="shapes-params" id="shapes-params">
+            <div class="shapes-row">
+              <label>Shape</label>
+              <select id="shape-type">
+                <option value="triangle">triangle</option>
+                <option value="square">square</option>
+                <option value="pentagon">pentagon</option>
+                <option value="hexagon">hexagon</option>
+                <option value="line">line</option>
+                <option value="point">point</option>
+              </select>
+            </div>
+            <div class="shapes-row">
+              <label>Center X (m)</label>
+              <input id="shape-cx" type="number" value="0" step="0.1" />
+            </div>
+            <div class="shapes-row">
+              <label>Center Y (m)</label>
+              <input id="shape-cy" type="number" value="0" step="0.1" />
+            </div>
+            <div class="shapes-row">
+              <label>Radius (m)</label>
+              <input id="shape-r" type="number" value="0.5" step="0.05" min="0.05" />
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Right column — map -->
+      <div class="right-col">
+        <section class="panel map-panel">
+          <div class="panel-header">
+            <h2>Map</h2>
+            <span class="panel-tag">±2.5 m</span>
+          </div>
+          <div class="map-wrap">
+            <canvas id="map" width="500" height="500"></canvas>
+          </div>
+        </section>
+      </div>
+
+    </div>
+
+    <!-- Log panel -->
+    <section class="panel log-section">
+      <div class="panel-header">
+        <h2>Log</h2>
+        <button class="btn-clear" id="btn-clear-log">clear</button>
+      </div>
+      <div id="log-panel"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
