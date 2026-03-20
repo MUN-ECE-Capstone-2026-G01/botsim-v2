@@ -78,8 +78,8 @@ class BrokerState:
         """Fan out latest positions to all Pis and all UI clients.
         Pis receive all known positions (needed for algorithm computation).
         UI clients receive only currently-connected robots so offline status is accurate."""
-        all_msg    = json.dumps({"type": "state", "positions": self.positions})
         online_pos = {rid: pos for rid, pos in self.positions.items() if rid in self._robots}
+        all_msg    = json.dumps({"type": "state", "positions": online_pos})
         ui_msg     = json.dumps({"type": "state", "positions": online_pos})
 
         for ws in list(self._robots.values()):

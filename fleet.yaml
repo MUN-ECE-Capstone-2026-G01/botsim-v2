@@ -2,7 +2,8 @@
 # Deploy this file to ~/botsim/fleet.yaml on each Pi alongside robot/.
 
 # broker_host: "192.168.x.x"   # set to host laptop IP before deploying
-broker_host: "192.168.78.83"
+# broker_host: "192.168.78.83"
+broker_host: "192.168.1.2"
 broker_port: 8765
 broker_timeout: 5              # seconds before robot stops if broker unreachable
 trajectory_cleanup_delay: 10   # seconds after arrival before trail is cleared from UI map
@@ -22,24 +23,26 @@ lighthouse_bin_path:    "~/Desktop/lighthousedeck/lighthouse-fpga/lighthouse.bin
 lighthouse_uart:        "/dev/ttyAMA2"
 
 robots:
-  - id: civr-white
-    host: civr-white.local
-    user: visor
-    invert_v: true             # negate forward velocity (depends on motor wiring)
-    color: white
+  # - id: civr-red
+  #   host: 192.168.1.101
+  #   user: visor
+  #   invert_v: true             # negate forward velocity (depends on motor wiring)
+  #   color: red
   - id: civr-blue
-    host: civr-blue.local
+    host: 192.168.1.102
     user: visor
     invert_v: true
     color: blue
-  # - id: civr-3
-  #   host: civr-3.local
-  #   user: visor
-  #   invert_v: false
-  # - id: civr-4
-  #   host: civr-4.local
-  #   user: visor
-  #   invert_v: false
+  - id: civr-white
+    host: 192.168.1.103
+    user: visor
+    invert_v: true
+    color: white
+  - id: civr-green
+    host: 192.168.1.104
+    user: visor
+    invert_v: true
+    color: green
   # - id: civr-5
   #   host: civr-5.local
   #   user: visor
