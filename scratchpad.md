@@ -4,6 +4,7 @@
 - [ ] Backup SD cards?
 - [x] Remove Pentagon (Since it is deployed in shapes now)
 - [x] Get you code stable
+- [ ] Remove dependency on lighthouse venv
 - [ ] Then integrate Arya's code (Explanation later)
 
 ## Notes
