@@ -56,7 +56,8 @@ In the UI, click **Deploy All** (or per-robot **Deploy**).
 This uploads `robot/` + `fleet.yaml` to `~/botsim/` on each Pi via SFTP.
 
 Watch the log panel — expect:
-```
+
+```bash
 [civr-white] deploy: ok
 [civr-blue] deploy: ok
 ```
@@ -71,12 +72,14 @@ Watch the log panel — expect:
 Click **Start All** (or per-robot **Start**).
 
 This SSHes into each Pi and:
+
 1. Reboots the lighthouse FPGA
 2. Flashes `lighthouse.bin` via UART bootloader
 3. Launches `agent.py` as a background daemon
 
 This takes ~15–20 s per robot. Watch the log panel — expect:
-```
+
+```bash
 [civr-white] start: ok
 [civr-blue] start: ok
 [civr-white] connected
@@ -123,7 +126,7 @@ Click **Stop All** — runs `pkill -f agent.py` on each Pi. Motors stop immediat
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
-|---|---|---|
+| --- | --- | --- |
 | Deploy: connection refused / timeout | Pi not reachable | `ping civr-white.local` — check WiFi |
 | Deploy: authentication failed | Wrong SSH password | Check `SSH_PASSWORD` in `.env` |
 | Start: ok but robot never connects | Wrong `broker_host` in `fleet.yaml` | Set to laptop's current WiFi IP |

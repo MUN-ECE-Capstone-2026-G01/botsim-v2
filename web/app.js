@@ -45,7 +45,6 @@ let trajectoryCleanupDelay = 3; // seconds — from GET /config
 
 const TRAIL_MAX        = 300;
 const ARRIVE_THRESHOLD = 0.10;  // metres
-const PENTAGON_RADIUS  = 0.5;   // metres — must match pentagon.py
 const WORLD_RANGE      = 2.5;   // ±metres on map
 
 // Shapes algorithm vertex counts (must match shapes.py)
@@ -132,8 +131,7 @@ function mergePositions(positions) {
 // Trail tracking
 // ---------------------------------------------------------------------------
 
-function getActiveTargets(onlineRobots) {
-  if (state.algorithm === 'pentagon') return getPentagonVertices(onlineRobots);
+function getActiveTargets() {
   if (state.algorithm === 'shapes' && activeShapeParams) {
     const { shape, center_x, center_y, radius } = activeShapeParams;
     return getShapeVertices(shape, center_x, center_y, radius);
@@ -148,7 +146,7 @@ function updateTrails() {
     .filter(([, p]) => p.online)
     .map(([id, p]) => ({ id, x: p.x, y: p.y }));
 
-  const targets    = getActiveTargets(onlineRobots);
+  const targets    = getActiveTargets();
   const assignment = targets ? assignTargets(onlineRobots, targets) : {};
 
   for (const [id, pos] of Object.entries(state.robots)) {
@@ -184,19 +182,6 @@ function updateTrails() {
 // ---------------------------------------------------------------------------
 // Formation geometry
 // ---------------------------------------------------------------------------
-
-function getPentagonVertices(robots) {
-  if (robots.length === 0) return null;
-  const cx = robots.reduce((s, r) => s + r.x, 0) / robots.length;
-  const cy = robots.reduce((s, r) => s + r.y, 0) / robots.length;
-  return Array.from({ length: 5 }, (_, i) => {
-    const angle = (2 * Math.PI * i / 5) - Math.PI / 2;
-    return {
-      x: cx + PENTAGON_RADIUS * Math.cos(angle),
-      y: cy + PENTAGON_RADIUS * Math.sin(angle),
-    };
-  });
-}
 
 function getShapeVertices(shape, cx, cy, radius) {
   const n = SHAPE_VERTEX_COUNT[shape] ?? 3;
@@ -340,8 +325,8 @@ function renderMap() {
   let targets    = null;
   let assignment = {};
 
-  if (state.algorithm === 'pentagon' || state.algorithm === 'shapes') {
-    targets    = getActiveTargets(onlineRobots);
+  if (state.algorithm === 'shapes') {
+    targets    = getActiveTargets();
     assignment = targets ? assignTargets(onlineRobots, targets) : {};
     if (targets) drawFormationMarkers(ctx, W, H, scale, targets);
   }

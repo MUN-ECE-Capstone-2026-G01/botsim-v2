@@ -1,9 +1,10 @@
 # Tasks
 
-- I need to fix IP addresses (Not to be implemented by AI)
-- Remove Pentagon (Since it is deployed in shapes now)
-- Get you code stable
-- Then integrate Arya's code (Explanation later)
+- [x] I need to fix IP addresses (Not to be implemented by AI)
+- [ ] Backup SD cards?
+- [x] Remove Pentagon (Since it is deployed in shapes now)
+- [x] Get you code stable
+- [ ] Then integrate Arya's code (Explanation later)
 
 ## Notes
 
